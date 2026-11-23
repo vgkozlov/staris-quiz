@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Квиз СТАРИС</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Макет: одна колонка 720px; сверху выбор темы, затем карточка вопроса с сегментной лентой прогресса
+   (каждый сегмент — один вопрос и его результат), в конце итог по темам и разбор ошибок. */
+:root {
+  --bg: #F3F5F8;
+  --surface: #FFFFFF;
+  --ink: #18212D;
+  --muted: #586272;
+  --line: #D8DEE6;
+  --accent: #1D5FC0;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E6EEFA;
+  --good: #17703F;
+  --good-soft: #E4F4EB;
+  --bad: #A93226;
+  --bad-soft: #FBE9E6;
+  --code: #EDF0F4;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-head: 'Manrope', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161D; --surface: #19202A; --ink: #E7ECF3; --muted: #9CA8B8; --line: #2B3441;
+    --accent: #7FAEF5; --accent-ink: #0B1220; --accent-soft: #1C2A42;
+    --good: #63C892; --good-soft: #14301F; --bad: #F28B80; --bad-soft: #3A1B18; --code: #0E1319;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161D; --surface: #19202A; --ink: #E7ECF3; --muted: #9CA8B8; --line: #2B3441;
+  --accent: #7FAEF5; --accent-ink: #0B1220; --accent-soft: #1C2A42;
+  --good: #63C892; --good-soft: #14301F; --bad: #F28B80; --bad-soft: #3A1B18; --code: #0E1319;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--font-body); margin: 0; }
+.wrap {
+  max-width: 720px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+h1, h2, h3 { font-family: var(--font-head); line-height: 1.25; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.6rem, 5vw, 2.1rem); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.2rem; font-weight: 700; }
+h3 { font-size: 1rem; font-weight: 700; }
+p { margin: 0; }
+code, pre { font-family: var(--font-mono); }
+:not(pre) > code { background: var(--code); border-radius: 4px; padding: 0.08em 0.38em; font-size: 0.9em; overflow-wrap: anywhere; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.lead { color: var(--muted); max-width: 60ch; margin-top: 10px; }
+#hero { margin-bottom: 20px; }
+#hero.compact h1 { font-size: 1.15rem; }
+#hero.compact .eyebrow { margin-bottom: 4px; }
+
+/* выбор темы */
+.topics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 24px; }
+.topic {
+  text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  transition: border-color .15s, background-color .15s;
+}
+.topic:hover { border-color: var(--accent); }
+.topic .name { font-family: var(--font-head); font-weight: 700; font-size: 1.05rem; }
+.topic .count { font-size: 0.82rem; font-weight: 600; color: var(--accent); }
+.topic .hint { font-size: 0.85rem; color: var(--muted); }
+.topic--all { grid-column: 1 / -1; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.topic--all:hover { border-color: var(--accent); filter: brightness(1.06); }
+.topic--all .count, .topic--all .hint { color: var(--accent-ink); opacity: 0.9; }
+.note { margin-top: 20px; font-size: 0.88rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 6px; }
+
+/* вопрос */
+.qhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.tag { font-size: 0.78rem; font-weight: 600; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; }
+.qcount { font-size: 0.88rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.linkbtn { background: none; border: 0; padding: 4px 0; color: var(--muted); font-size: 0.88rem; text-decoration: underline; text-underline-offset: 3px; }
+.linkbtn:hover { color: var(--ink); }
+.seg { display: flex; gap: 2px; margin-bottom: 16px; }
+.seg i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); min-width: 2px; }
+.seg i.good { background: var(--good); }
+.seg i.bad { background: var(--bad); }
+.seg i.now { background: var(--accent); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.card h2:focus { outline: none; }
+.code {
+  margin: 14px 0 0; padding: 12px 14px; background: var(--code); border-radius: 8px;
+  font-size: 0.86rem; line-height: 1.5; overflow-x: auto; white-space: pre; tab-size: 4;
+}
+.opts { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+.opt {
+  width: 100%; text-align: left; display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-height: 48px;
+  transition: border-color .15s, background-color .15s;
+}
+.opt .mark {
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center;
+  font-size: 0.82rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.opt .txt { padding-top: 3px; overflow-wrap: anywhere; min-width: 0; }
+.opts.open .opt:hover { border-color: var(--accent); background: var(--accent-soft); }
+.opts.locked .opt { cursor: default; }
+.opt.is-ok { border-color: var(--good); background: var(--good-soft); }
+.opt.is-ok .mark { background: var(--good); border-color: var(--good); color: var(--surface); }
+.opt.is-bad { border-color: var(--bad); background: var(--bad-soft); }
+.opt.is-bad .mark { background: var(--bad); border-color: var(--bad); color: var(--surface); }
+.opts.locked .opt:not(.is-ok):not(.is-bad) { opacity: 0.62; }
+
+.fb { margin-top: 16px; border-radius: 10px; padding: 14px 16px; border: 1px solid var(--line); }
+.fb.good { background: var(--good-soft); border-color: var(--good); }
+.fb.bad { background: var(--bad-soft); border-color: var(--bad); }
+.fb .verdict { font-weight: 700; margin-bottom: 4px; }
+.fb.good .verdict { color: var(--good); }
+.fb.bad .verdict { color: var(--bad); }
+.actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+.btn {
+  background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent); border-radius: 8px;
+  padding: 10px 18px; font-weight: 600; min-height: 44px;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { border-color: var(--accent); filter: none; }
+
+/* итог */
+.score { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.score .big { font-family: var(--font-head); font-weight: 800; font-size: 3rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.score .of { font-size: 1.3rem; color: var(--muted); }
+.score .pct { font-size: 1.05rem; font-weight: 600; color: var(--accent); margin-left: auto; font-variant-numeric: tabular-nums; }
+.verdict-line { margin-top: 10px; }
+.sub { margin-top: 6px; font-size: 0.85rem; color: var(--muted); }
+.bytopic { margin-top: 20px; display: grid; gap: 12px; }
+.bt { display: grid; gap: 6px; }
+.bt .row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.92rem; }
+.bt .row span:last-child { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.result-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+.review { margin-top: 28px; display: grid; gap: 14px; }
+.rv { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; }
+.rv .q { font-weight: 600; }
+.rv .yours, .rv .right { font-size: 0.94rem; padding-left: 10px; border-left: 3px solid var(--line); }
+.rv .yours { border-left-color: var(--bad); }
+.rv .right { border-left-color: var(--good); }
+.rv .why { color: var(--muted); font-size: 0.92rem; }
+.rv .lbl { font-weight: 600; }
+.empty { color: var(--muted); margin-top: 24px; }
+
+@media (max-width: 480px) {
+  .card { padding: 16px; }
+  .score .big { font-size: 2.5rem; }
+  .actions .btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header id="hero">
+    <div class="eyebrow">СТАРИС · самопроверка</div>
+    <h1>Паттерны, DevOps и Git</h1>
+    <p class="lead" id="lead">Короткие вопросы с мгновенной проверкой и пояснением после каждого ответа. Выберите тему или пройдите все сразу.</p>
+  </header>
+
+  <section id="start" aria-labelledby="startTitle">
+    <h2 id="startTitle" class="eyebrow" style="margin-top:28px;margin-bottom:0">Тема</h2>
+    <div class="topics" id="topics"></div>
+    <div class="note">
+      <p>Регистрация не нужна. Результаты не сохраняются и никуда не отправляются.</p>
+      <p>Порядок вопросов и вариантов ответа каждый раз новый. С клавиатуры: цифры 1–4 выбирают вариант, Enter переходит дальше.</p>
+    </div>
+  </section>
+
+  <section id="quiz" hidden aria-label="Вопрос">
+    <div class="qhead">
+      <span class="tag" id="qTopic"></span>
+      <span class="qcount" id="qCount"></span>
+      <button class="linkbtn" id="qExit" type="button">К выбору темы</button>
+    </div>
+    <div class="seg" id="seg" aria-hidden="true"></div>
+    <article class="card">
+      <h2 id="qText" tabindex="-1"></h2>
+      <pre class="code" id="qCode" hidden></pre>
+      <ol class="opts open" id="opts"></ol>
+      <div id="fbBox" aria-live="polite"></div>
+      <div class="actions"><button class="btn" id="next" type="button" hidden>Дальше</button></div>
+    </article>
+  </section>
+
+  <section id="result" hidden aria-labelledby="resTitle">
+    <h2 id="resTitle" class="eyebrow" tabindex="-1" style="margin-bottom:10px">Результат</h2>
+    <div class="card">
+      <div class="score"><span class="big" id="rScore"></span><span class="of" id="rOf"></span><span class="pct" id="rPct"></span></div>
+      <p class="verdict-line" id="rVerdict"></p>
+      <p class="sub" id="rGrade"></p>
+      <div class="bytopic" id="rByTopic"></div>
+      <div class="result-actions">
+        <button class="btn" id="rRetry" type="button" hidden></button>
+        <button class="btn ghost" id="rAgain" type="button">Пройти заново</button>
+        <button class="btn ghost" id="rMenu" type="button">К выбору темы</button>
+      </div>
+    </div>
+    <div class="review" id="rReview"></div>
+  </section>
+</main>
+
+<script>
+// Банк вопросов. В поле o первым стоит верный ответ; при показе порядок перемешивается.
+// t: patterns | devops | git. code: необязательный фрагмент кода. e: пояснение после ответа.
+const BANK = [
+  // ───────── Паттерны проектирования ─────────
+  {
+    t: "patterns",
+    q: "Какой паттерн гарантирует, что у класса есть только один экземпляр, и даёт к нему глобальную точку доступа?",
+    o: ["Singleton (одиночка)", "Prototype (прототип)", "Facade (фасад)", "Mediator (посредник)"],
+    e: "Singleton — порождающий паттерн: конструктор скрыт, а единственный экземпляр выдаёт статический метод доступа."
+  },
+  {
+    t: "patterns",
+    q: "К какой группе каталога GoF относится паттерн Observer?",
+    o: ["Поведенческие", "Порождающие", "Структурные", "Архитектурные"],
+    e: "В каталоге GoF три группы: порождающие (создание объектов), структурные (состав классов и объектов) и поведенческие (взаимодействие и распределение обязанностей). Observer — поведенческий. Группы «архитектурные» в каталоге нет."
+  },
+  {
+    t: "patterns",
+    q: "В чём суть паттерна Strategy?",
+    o: [
+      "Семейство взаимозаменяемых алгоритмов скрыто за общим интерфейсом, и нужный алгоритм выбирается во время выполнения",
+      "Единственный экземпляр алгоритма создаётся при запуске программы и затем используется во всём приложении всеми клиентами без исключения",
+      "Сложный объект строится пошагово, причём один и тот же процесс построения может давать различные представления этого объекта",
+      "Объект копируется вместе со своим состоянием"
+    ],
+    e: "Strategy выносит варианты алгоритма в отдельные классы с общим интерфейсом. Клиент подставляет нужную стратегию, не меняя собственный код."
+  },
+  {
+    t: "patterns",
+    q: "В какой ситуации уместен паттерн Observer?",
+    o: [
+      "Изменение одного объекта должно автоматически отражаться в других, при этом жёсткой связи между ними быть не должно",
+      "Нужно создавать объекты, не указывая их конкретный класс, и поручать выбор создаваемого типа подклассам или отдельным фабричным методам",
+      "Нужно скрыть сложную подсистему из десятков классов за простым единым интерфейсом, чтобы клиент не зависел от её устройства",
+      "Нужно заставить класс с несовместимым интерфейсом работать с клиентским кодом"
+    ],
+    e: "Observer (наблюдатель) определяет зависимость «один ко многим»: при изменении состояния издателя все подписчики получают уведомление. Остальные три варианта описывают Factory Method, Facade и Adapter."
+  },
+  {
+    t: "patterns",
+    q: "Класс сторонней библиотеки имеет метод `getData()`, а ваш код ожидает интерфейс с методом `read()`. Менять библиотеку нельзя. Какой паттерн решает задачу?",
+    o: ["Adapter (адаптер)", "Singleton (одиночка)", "Builder (строитель)", "Observer (наблюдатель)"],
+    e: "Adapter приводит интерфейс одного класса к интерфейсу, который ожидает клиент, не изменяя исходный класс."
+  },
+  {
+    t: "patterns",
+    q: "Какой паттерн в первую очередь проявляется в таком оборачивании потоков?",
+    code: `InputStream in = new BufferedInputStream(
+        new FileInputStream("data.bin"));`,
+    o: ["Decorator (декоратор)", "Singleton (одиночка)", "Prototype (прототип)", "Visitor (посетитель)"],
+    e: "Decorator добавляет объекту новые обязанности (здесь — буферизацию), оборачивая его в объект с тем же интерфейсом. Не нужен отдельный подкласс на каждое сочетание возможностей."
+  },
+  {
+    t: "patterns",
+    q: "Подсистема состоит из десятков классов, а клиенту нужны всего три операции. Какой паттерн даст один простой интерфейс к ней?",
+    o: ["Facade (фасад)", "Composite (компоновщик)", "Iterator (итератор)", "Command (команда)"],
+    e: "Facade предоставляет унифицированный упрощённый интерфейс к набору интерфейсов подсистемы и уменьшает зависимость клиента от её устройства."
+  },
+  {
+    t: "patterns",
+    q: "Чем Abstract Factory отличается от Factory Method?",
+    o: [
+      "Abstract Factory создаёт семейства связанных объектов, а Factory Method — один продукт, класс которого определяют подклассы",
+      "Abstract Factory работает только с абстрактными классами и интерфейсами, а Factory Method — исключительно с конкретными классами без наследования",
+      "Abstract Factory гарантирует единственный экземпляр фабрики, а Factory Method — нет",
+      "Различий нет: это два названия одного паттерна"
+    ],
+    e: "Factory Method — метод, который подклассы переопределяют, чтобы выбрать создаваемый класс. Abstract Factory — интерфейс для создания целого семейства согласованных продуктов (например, элементов интерфейса одной темы)."
+  },
+  {
+    t: "patterns",
+    q: "Конструктор класса принимает девять параметров, большинство необязательные. Какой паттерн избавляет от «телескопических конструкторов»?",
+    o: ["Builder (строитель)", "Adapter (адаптер)", "Proxy (заместитель)", "State (состояние)"],
+    e: "Builder выносит пошаговое создание сложного объекта в отдельный класс: клиент задаёт только нужные параметры и вызывает `build()`."
+  },
+  {
+    t: "patterns",
+    q: "Что определяет паттерн Template Method?",
+    o: [
+      "Скелет алгоритма в базовом классе, при этом отдельные шаги переопределяются в подклассах, а порядок шагов остаётся неизменным",
+      "Способ подписки множества объектов на события другого объекта с автоматическим уведомлением при каждом изменении",
+      "Правила создания объектов через общий интерфейс",
+      "Способ копирования объекта без привязки к его классу"
+    ],
+    e: "Template Method фиксирует порядок шагов алгоритма в базовом классе и позволяет подклассам изменять отдельные шаги, не меняя структуру алгоритма."
+  },
+  {
+    t: "patterns",
+    q: "При добавлении нового типа вагона придётся менять этот метод. Что лучше всего соответствует принципу открытости/закрытости?",
+    code: `double fee(String type, double hours) {
+    switch (type) {
+        case "COVERED":  return hours * 2.5;
+        case "TANK":     return hours * 2.5 * 1.15;
+        case "PLATFORM": return hours * 1.0;
+        default: throw new IllegalArgumentException(type);
+    }
+}`,
+    o: [
+      "Вынести расчёт в отдельные классы-стратегии по типам вагонов и подбирать нужную стратегию через общий интерфейс, не меняя код метода",
+      "Добавить в switch новую ветку для нового типа вагона и обязательно покрыть эту ветку отдельным модульным тестом",
+      "Заменить switch цепочкой if-else: так проще читать",
+      "Хранить тип вагона в статической переменной"
+    ],
+    e: "Принцип: модуль открыт для расширения и закрыт для изменения. Новый тип появляется как новый класс, существующий код не правится. Новая ветка в switch и замена его на if-else остаются изменением кода метода."
+  },
+  {
+    t: "patterns",
+    q: "Какая возможность естественно появляется, если действие оформлено как объект (паттерн Command)?",
+    o: [
+      "Постановка операций в очередь, ведение журнала и отмена (undo)",
+      "Автоматическая сборка мусора и освобождение памяти, занятой неиспользуемыми объектами",
+      "Гарантия единственного экземпляра класса",
+      "Преобразование интерфейса одного класса в интерфейс, который ожидает клиентский код"
+    ],
+    e: "Command превращает запрос в объект: его можно хранить, передавать, откладывать, записывать в журнал и отменять."
+  },
+  {
+    t: "patterns",
+    q: "Объект-заместитель создаёт тяжёлый ресурс только при первом обращении и контролирует доступ к нему. Это паттерн…",
+    o: ["Proxy (заместитель)", "Decorator (декоратор)", "Mediator (посредник)", "Prototype (прототип)"],
+    e: "Proxy имеет тот же интерфейс, что и настоящий объект, и управляет доступом к нему: ленивая инициализация, защита, кэширование. Decorator, напротив, добавляет объекту новые обязанности."
+  },
+  {
+    t: "patterns",
+    q: "Вагон бывает «в пути», «на станции» и «в ремонте», и одна и та же операция «принять груз» в каждом состоянии ведёт себя по-разному. Какой паттерн для этого предназначен?",
+    o: ["State (состояние)", "Strategy (стратегия)", "Prototype (прототип)", "Adapter (адаптер)"],
+    e: "State позволяет объекту менять поведение при смене внутреннего состояния: само состояние — отдельный класс, переходы выполняет сам объект. В Strategy алгоритм выбирает клиент снаружи, и между стратегиями нет переходов."
+  },
+  {
+    t: "patterns",
+    q: "Какой недостаток чаще всего приписывают паттерну Singleton?",
+    o: [
+      "Глобальное состояние и скрытые зависимости усложняют изоляцию классов и, как следствие, модульное тестирование",
+      "Невозможно создать ни одного экземпляра, поскольку конструктор класса полностью удаляется из кода",
+      "Обязательно наследование от абстрактного класса",
+      "Он несовместим с многопоточностью в любом виде"
+    ],
+    e: "Обращение к Singleton из любого места делает зависимости неявными, а общее изменяемое состояние затрудняет изоляцию тестов. Потокобезопасный Singleton написать можно."
+  },
+  {
+    t: "patterns",
+    q: "Нужно единообразно работать и с отдельным элементом, и с группой элементов (например, с файлом и папкой). Какой паттерн это обеспечивает?",
+    o: ["Composite (компоновщик)", "Observer (наблюдатель)", "Memento (хранитель)", "Chain of Responsibility (цепочка обязанностей)"],
+    e: "Composite собирает объекты в древовидную структуру, где и листья, и составные узлы реализуют общий интерфейс, поэтому клиент не различает их."
+  },
+
+  // ───────── DevOps, CI/CD ─────────
+  {
+    t: "devops",
+    q: "Что означает CI (Continuous Integration)?",
+    o: [
+      "Частую автоматическую интеграцию изменений в общую ветку, при которой каждое изменение сразу проходит автоматическую сборку и тесты",
+      "Ежегодную плановую проверку всей инфраструктуры силами внешнего специалиста по информационной безопасности",
+      "Автоматическое развёртывание в продуктивную среду после каждого коммита без проверок",
+      "Хранение исходного кода на сервере компании"
+    ],
+    e: "При непрерывной интеграции каждое изменение автоматически собирается и проверяется тестами, поэтому ошибки интеграции находят в течение минут, а не перед релизом."
+  },
+  {
+    t: "devops",
+    q: "Чем Continuous Deployment отличается от Continuous Delivery?",
+    o: [
+      "При Deployment выкладка в продуктивную среду полностью автоматическая, при Delivery её запускает человек",
+      "При Delivery автоматические тесты не запускаются, проверку выполняют вручную перед каждым релизом, а при Deployment тесты обязательны",
+      "Deployment применяют только для мобильных приложений",
+      "Ничем: это два названия одного и того же"
+    ],
+    e: "Delivery — любое изменение всегда готово к выкладке, но запускает её человек. Deployment — выкладка полностью автоматическая."
+  },
+  {
+    t: "devops",
+    q: "В пайплайне этап `test` завершился с ошибкой. Что произойдёт по умолчанию с зависящими от него этапами `package` и `deploy`?",
+    o: [
+      "Они не выполнятся, а сборка будет помечена как неуспешная",
+      "Они выполнятся, ошибка только запишется в журнал",
+      "Пайплайн сам исправит тесты и продолжит работу",
+      "Они выполнятся в обычном порядке, а в отчёте сборки появится только пометка «предупреждение»"
+    ],
+    e: "Зависимые этапы по умолчанию пропускаются, и это защищает от выкладки неработающего кода. Выполнить их несмотря на ошибку можно только явной настройкой, например условием `if: always()`."
+  },
+  {
+    t: "devops",
+    q: "В чём разница между образом (image) и контейнером в Docker?",
+    o: [
+      "Образ — неизменяемый шаблон, контейнер — запущенный экземпляр образа",
+      "Образ — запущенный процесс, контейнер — файл с описанием",
+      "Образ хранится только в облаке, контейнер — только на локальном диске",
+      "Разницы нет, это синонимы"
+    ],
+    e: "Из одного образа можно запустить много контейнеров. Образ собирают по `Dockerfile`, и после сборки он не меняется."
+  },
+  {
+    t: "devops",
+    q: "Чем контейнер принципиально отличается от виртуальной машины?",
+    o: [
+      "Контейнеры используют ядро хостовой ОС, а виртуальная машина запускает собственную гостевую ОС поверх гипервизора",
+      "Контейнеры работают только в операционных системах семейства Linux, а виртуальные машины — исключительно под управлением Windows Server",
+      "Изоляция в контейнере всегда выше, чем в виртуальной машине, поскольку у каждого контейнера есть собственное отдельное ядро",
+      "Контейнер не может хранить файлы"
+    ],
+    e: "Поэтому контейнеры легче и запускаются быстрее, но изоляция у них слабее: ядро общее."
+  },
+  {
+    t: "devops",
+    q: "Что такое Infrastructure as Code (инфраструктура как код)?",
+    o: [
+      "Описание инфраструктуры в файлах под версионным контролем, по которым среду разворачивают автоматически",
+      "Написание и правка программ прямо на боевых серверах без хранения исходных файлов в репозитории и без ревью",
+      "Использование только графических консолей облачных провайдеров для ручной настройки каждого сервера и сети по инструкции",
+      "Шифрование исходного кода"
+    ],
+    e: "Инфраструктуру описывают декларативно (например, Terraform, Ansible) и проверяют так же, как код: ревью, история изменений, повторяемость."
+  },
+  {
+    t: "devops",
+    q: "Где в репозитории GitHub хранятся файлы рабочих процессов GitHub Actions?",
+    o: [
+      "В каталоге `.github/workflows/` в формате YAML",
+      "В файле `README.md` в корне репозитория, в специальном разделе с описанием сборки",
+      "В каталоге `src/main/resources/`",
+      "В файле `pom.xml`"
+    ],
+    e: "Каждый файл `.yml` или `.yaml` в `.github/workflows/` — отдельный рабочий процесс со своими триггерами и заданиями."
+  },
+  {
+    t: "devops",
+    q: "Когда будет запускаться такой рабочий процесс?",
+    code: `on:
+  pull_request:`,
+    o: [
+      "При открытии, обновлении и повторном открытии запроса на слияние (pull request)",
+      "Только в момент слияния запроса в ветку main, после того как он принят рецензентом",
+      "Каждые 24 часа по расписанию, независимо от того, появились ли в репозитории новые изменения",
+      "Только при ручном запуске из интерфейса"
+    ],
+    e: "Для события `pull_request` по умолчанию срабатывают типы opened, synchronize (новые коммиты в запросе) и reopened. Расписанию соответствует `schedule`, ручному запуску — `workflow_dispatch`."
+  },
+  {
+    t: "devops",
+    q: "Как правильно передать токен доступа в конвейер CI/CD?",
+    o: [
+      "Через хранилище секретов системы CI (например, GitHub Secrets)",
+      "Записать токен в файл `README.md`, чтобы участники проекта всегда могли его найти",
+      "Прописать токен прямо в YAML-файле рабочего процесса и закрыть доступ к репозиторию паролем",
+      "Прислать токен коллегам в чат, чтобы каждый вставлял его вручную при запуске"
+    ],
+    e: "Секреты хранятся отдельно от кода и маскируются в журналах. Всё, что попало в репозиторий, остаётся в его истории, даже если файл потом удалить."
+  },
+  {
+    t: "devops",
+    q: "Для чего в первую очередь предназначен Kubernetes?",
+    o: [
+      "Для оркестрации контейнеров: автоматизации развёртывания, масштабирования и управления",
+      "Для хранения исходного кода, ведения истории изменений и управления версиями файлов команды разработчиков",
+      "Для написания, запуска и автоматического анализа результатов модульных и интеграционных тестов",
+      "Для статического анализа исходного кода и поиска в нём потенциальных уязвимостей и ошибок"
+    ],
+    e: "Kubernetes следит за заданным состоянием: сколько копий приложения должно работать, перезапускает упавшие, распределяет нагрузку и обновляет версии."
+  },
+  {
+    t: "devops",
+    q: "Какая из перечисленных метрик относится к метрикам DORA?",
+    o: [
+      "Частота развёртываний (deployment frequency)",
+      "Среднее число строк кода, написанных командой за неделю",
+      "Число коммитов на одного разработчика",
+      "Процент покрытия тестами"
+    ],
+    e: "Метрики DORA оценивают эффективность поставки: частота развёртываний, время внесения изменений, доля неудачных изменений и время восстановления сервиса."
+  },
+  {
+    t: "devops",
+    q: "В чём идея развёртывания blue-green?",
+    o: [
+      "Две идентичные среды: новая версия разворачивается в неактивной, затем трафик переключается; откат — обратное переключение",
+      "Новая версия сразу заменяет старую на всех серверах одновременно, а возврат к прежней версии не предусмотрен самой конструкцией процесса",
+      "Версия выкладывается только на тестовый сервер",
+      "Разработчики и тестировщики работают в разных репозиториях"
+    ],
+    e: "Пока трафик идёт в «синюю» среду, новую версию проверяют в «зелёной». Если что-то пошло не так, трафик возвращают назад."
+  },
+
+  // ───────── Git ─────────
+  {
+    t: "git",
+    q: "Что такое HEAD в Git?",
+    o: [
+      "Указатель на текущий коммит (обычно через ветку), от которого продолжается история",
+      "Самый первый коммит репозитория, от которого начинается вся история изменений проекта",
+      "Удалённый репозиторий по умолчанию, который создаётся автоматически при клонировании проекта",
+      "Служебный файл со списком путей, которые Git игнорирует при добавлении файлов в индекс"
+    ],
+    e: "HEAD показывает, где вы находитесь в истории. Обычно он указывает на ветку, а ветка — на её последний коммит."
+  },
+  {
+    t: "git",
+    q: "Что делает команда `git add`?",
+    o: [
+      "Помещает изменения в индекс (область подготовленных изменений) перед коммитом",
+      "Создаёт коммит с сообщением и сразу фиксирует в истории все изменённые файлы рабочего каталога",
+      "Отправляет все зафиксированные изменения на удалённый сервер для других участников",
+      "Создаёт новую ветку от текущего коммита и сразу переключает рабочий каталог на неё"
+    ],
+    e: "Коммит фиксирует то, что лежит в индексе, а не всё, что изменено в рабочем каталоге. Поэтому сначала `git add`, затем `git commit`."
+  },
+  {
+    t: "git",
+    q: "Чем `git pull` отличается от `git fetch`?",
+    o: [
+      "fetch только загружает данные с сервера, а pull после загрузки ещё и сливает их с текущей веткой",
+      "fetch загружает с сервера только файлы рабочего каталога, а pull — исключительно историю коммитов без файлов",
+      "pull работает только локально и не обращается к сети, а fetch всегда обращается к удалённому серверу",
+      "Ничем не отличаются: это две записи одной и той же команды, и результат у них всегда совпадает полностью"
+    ],
+    e: "По умолчанию `git pull` — это `git fetch` плюс `git merge` (или rebase, если так настроено)."
+  },
+  {
+    t: "git",
+    q: "Почему не следует делать rebase коммитов, уже опубликованных в общей ветке?",
+    o: [
+      "Rebase переписывает историю, и у коллег копии репозитория расходятся с опубликованной",
+      "Rebase безвозвратно удаляет изменённые файлы из рабочего каталога всех участников проекта",
+      "Rebase запрещён на GitHub и других платформах совместной разработки по соображениям безопасности",
+      "Rebase работает только с одним коммитом за раз и не умеет переносить целые цепочки коммитов"
+    ],
+    e: "После rebase коммиты получают новые хэши. Те, кто уже взял старые коммиты, получат конфликты и дубли. Rebase безопасен для локальных, ещё не опубликованных коммитов."
+  },
+  {
+    t: "git",
+    q: "Что такое pull request?",
+    o: [
+      "Запрос на слияние ветки с обсуждением, ревью и автоматическими проверками",
+      "Консольная команда Git для скачивания чужого репозитория на локальный компьютер",
+      "Откат последнего опубликованного коммита с созданием нового коммита с обратными изменениями",
+      "Способ удалить ветку на сервере после того, как её изменения попали в основную ветку"
+    ],
+    e: "Pull request — функция платформы (GitHub, GitLab называет это merge request), а не команда самого Git. Именно в нём запускается CI и проходит ревью."
+  },
+  {
+    t: "git",
+    q: "Какая команда создаст ветку `feature/report` и сразу переключится на неё?",
+    o: [
+      "git switch -c feature/report",
+      "git merge feature/report",
+      "git branch -d feature/report",
+      "git stash feature/report"
+    ],
+    e: "Эквивалент по старому синтаксису — `git checkout -b feature/report`. Команда `git branch -d` ветку удаляет, а `git merge` сливает."
+  },
+  {
+    t: "git",
+    q: "Что означает блок между `<<<<<<< HEAD` и `=======`?",
+    code: `<<<<<<< HEAD
+double rate = 2.5;
+=======
+double rate = 3.0;
+>>>>>>> feature/tariff`,
+    o: [
+      "Версию строки из текущей ветки, в которую выполняется слияние",
+      "Версию строки из сливаемой ветки feature/tariff, которую Git подставил автоматически",
+      "Строки, которые Git уже удалил",
+      "Комментарий, оставленный автором коммита"
+    ],
+    e: "Между `=======` и `>>>>>>>` стоит версия из сливаемой ветки. Чтобы разрешить конфликт, оставьте нужный вариант, удалите маркеры, выполните `git add` и завершите слияние коммитом."
+  },
+  {
+    t: "git",
+    q: "Для чего нужен файл `.gitignore`?",
+    o: [
+      "Для списка шаблонов путей (например, `target/`, `*.class`), которые Git не отслеживает",
+      "Для хранения паролей и токенов доступа к удалённому репозиторию в зашифрованном виде",
+      "Для перечисления участников проекта",
+      "Для отключения проверок в CI"
+    ],
+    e: "Правила не действуют на файлы, которые уже попали под версионный контроль: их сначала нужно убрать из индекса командой `git rm --cached`."
+  },
+  {
+    t: "git",
+    q: "Коммит с ошибкой уже опубликован в общей ветке. Какая команда безопасно отменит его действие, не переписывая историю?",
+    o: [
+      "git revert <хэш>",
+      "git reset --hard <хэш>",
+      "git push --force после удаления коммита",
+      "git clean -fd"
+    ],
+    e: "`git revert` создаёт новый коммит с обратными изменениями, история остаётся нетронутой, поэтому подходит для общих веток. `reset --hard` и принудительная отправка переписывают историю."
+  },
+  {
+    t: "git",
+    q: "Вы не закончили правки, а срочно нужно переключиться на другую ветку. Что временно уберёт незафиксированные изменения, чтобы вернуть их позже?",
+    o: ["git stash", "git revert", "git tag", "git init"],
+    e: "`git stash` откладывает изменения во временное хранилище, `git stash pop` возвращает их обратно."
+  },
+  {
+    t: "git",
+    q: "В версии v1.0 дефекта не было, в текущей он есть. Какая команда найдёт коммит, внёсший дефект, бинарным поиском по истории?",
+    o: ["git bisect", "git blame", "git cherry-pick", "git log --oneline"],
+    e: "`git bisect` половинным делением предлагает коммиты для проверки: вы отмечаете каждый как good или bad, и за log₂(N) шагов находится виновник. Для тестировщика это один из самых полезных приёмов. `git blame` показывает автора каждой строки, но не ищет момент появления дефекта."
+  },
+  {
+    t: "git",
+    q: "Что покажет команда `git status`?",
+    o: [
+      "Изменённые, подготовленные и неотслеживаемые файлы",
+      "Полную историю коммитов текущей ветки с авторами и датами",
+      "Список удалённых репозиториев",
+      "Построчные различия между двумя выбранными ветками или коммитами"
+    ],
+    e: "История — это `git log`, различия — `git diff`, удалённые репозитории — `git remote -v`."
+  }
+];
+
+const TOPICS = {
+  patterns: { title: "Паттерны проектирования", short: "Паттерны", hint: "GoF: порождающие, структурные, поведенческие; принципы SOLID" },
+  devops:   { title: "DevOps и CI/CD",           short: "DevOps",   hint: "Пайплайны, контейнеры, GitHub Actions, развёртывание" },
+  git:      { title: "Git",                      short: "Git",      hint: "Ветки, слияние, конфликты, откат изменений" }
+};
+
+
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+  var fmt = function (s) { return esc(s).replace(/`([^`]+)`/g, '<code>$1</code>'); };
+  var shuffle = function (a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  };
+  var plural = function (n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  };
+  var KEYS = ['patterns', 'devops', 'git'];
+  var run = null;      // текущий прогон
+  var lastScope = null; // темы последнего прогона, для «Пройти заново»
+
+  function counts() {
+    var c = { patterns: 0, devops: 0, git: 0 };
+    BANK.forEach(function (q) { c[q.t]++; });
+    return c;
+  }
+
+  function renderTopics() {
+    var c = counts(), box = $('topics'), html = '';
+    KEYS.forEach(function (k) {
+      html += '<button class="topic" type="button" data-topic="' + k + '">' +
+        '<span class="name">' + esc(TOPICS[k].title) + '</span>' +
+        '<span class="count">' + c[k] + ' ' + plural(c[k], 'вопрос', 'вопроса', 'вопросов') + '</span>' +
+        '<span class="hint">' + esc(TOPICS[k].hint) + '</span></button>';
+    });
+    html += '<button class="topic topic--all" type="button" data-topic="all">' +
+      '<span class="name">Все темы подряд</span>' +
+      '<span class="count">' + BANK.length + ' ' + plural(BANK.length, 'вопрос', 'вопроса', 'вопросов') + '</span>' +
+      '<span class="hint">Вопросы всех трёх тем перемешаны</span></button>';
+    box.innerHTML = html;
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-topic]');
+      if (!b) return;
+      var k = b.getAttribute('data-topic');
+      startRun(k === 'all' ? KEYS.slice() : [k]);
+    });
+  }
+
+  function show(view) {
+    ['start', 'quiz', 'result'].forEach(function (id) { $(id).hidden = (id !== view); });
+    $('lead').hidden = (view !== 'start');
+    $('hero').classList.toggle('compact', view !== 'start');
+    window.scrollTo(0, 0);
+  }
+
+  function makeItem(q) {
+    var opts = shuffle(q.o.map(function (text, i) { return { text: text, ok: i === 0 }; }));
+    return { q: q, opts: opts, picked: null };
+  }
+
+  function startRun(scope, only) {
+    lastScope = scope;
+    var pool = only || BANK.filter(function (q) { return scope.indexOf(q.t) !== -1; });
+    run = { scope: scope, items: shuffle(pool).map(makeItem), i: 0 };
+    show('quiz');
+    renderQuestion();
+  }
+
+  function renderSeg() {
+    var html = '';
+    run.items.forEach(function (it, idx) {
+      var cls = it.picked === null ? (idx === run.i ? 'now' : '') : (it.opts[it.picked].ok ? 'good' : 'bad');
+      html += '<i class="' + cls + '"></i>';
+    });
+    $('seg').innerHTML = html;
+  }
+
+  function renderQuestion() {
+    var it = run.items[run.i], q = it.q;
+    var topicLabel = run.scope.length > 1 ? TOPICS[q.t].short : TOPICS[q.t].title;
+    $('qTopic').textContent = topicLabel;
+    $('qCount').textContent = 'Вопрос ' + (run.i + 1) + ' из ' + run.items.length;
+    renderSeg();
+    $('qText').innerHTML = fmt(q.q);
+    var code = $('qCode');
+    if (q.code) { code.textContent = q.code; code.hidden = false; } else { code.hidden = true; }
+    var ol = $('opts');
+    ol.className = 'opts open';
+    ol.innerHTML = it.opts.map(function (o, idx) {
+      return '<li><button class="opt" type="button" data-i="' + idx + '">' +
+        '<span class="mark" aria-hidden="true">' + (idx + 1) + '</span>' +
+        '<span class="txt">' + fmt(o.text) + '</span></button></li>';
+    }).join('');
+    $('fbBox').innerHTML = '';
+    $('next').hidden = true;
+    $('qText').focus({ preventScroll: true });
+  }
+
+  function pick(idx) {
+    var it = run.items[run.i];
+    if (it.picked !== null || idx < 0 || idx >= it.opts.length) return;
+    it.picked = idx;
+    var ol = $('opts');
+    ol.className = 'opts locked';
+    var btns = ol.querySelectorAll('.opt');
+    it.opts.forEach(function (o, i) {
+      var mark = btns[i].querySelector('.mark');
+      if (o.ok) { btns[i].classList.add('is-ok'); mark.textContent = '✓'; }
+      else if (i === idx) { btns[i].classList.add('is-bad'); mark.textContent = '✕'; }
+      btns[i].setAttribute('aria-disabled', 'true');
+    });
+    var good = it.opts[idx].ok;
+    $('fbBox').innerHTML = '<div class="fb ' + (good ? 'good' : 'bad') + '">' +
+      '<p class="verdict">' + (good ? 'Верно' : 'Неверно') + '</p>' +
+      '<p>' + fmt(it.q.e) + '</p></div>';
+    renderSeg();
+    var last = run.i === run.items.length - 1;
+    var next = $('next');
+    next.textContent = last ? 'Показать результат' : 'Дальше';
+    next.hidden = false;
+    next.focus({ preventScroll: true });
+    next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  function advance() {
+    if (run.i < run.items.length - 1) { run.i++; renderQuestion(); }
+    else { showResult(); }
+  }
+
+  function showResult() {
+    var items = run.items, total = items.length, byTopic = {}, wrong = [], right = 0;
+    items.forEach(function (it) {
+      var t = it.q.t;
+      byTopic[t] = byTopic[t] || { n: 0, ok: 0 };
+      byTopic[t].n++;
+      if (it.opts[it.picked].ok) { right++; byTopic[t].ok++; } else { wrong.push(it); }
+    });
+    var share = right / total, pct = Math.round(share * 100);
+    $('rScore').textContent = right;
+    $('rOf').textContent = 'из ' + total;
+    $('rPct').textContent = pct + '%';
+    var verdict = share >= 0.9 ? 'Отличный результат.' : share >= 0.75 ? 'Хороший результат.' : share >= 0.5 ? 'Неплохо, но стоит разобрать ошибки.' : 'Нужно вернуться к материалу и разобрать ошибки.';
+    $('rVerdict').textContent = verdict;
+    $('rGrade').textContent = 'Условный балл по 10-балльной шкале: ' + Math.round(share * 10) + ' (доля верных ответов × 10, только для самоконтроля).';
+
+    var bt = $('rByTopic'), html = '';
+    var keys = KEYS.filter(function (k) { return byTopic[k]; });
+    if (keys.length > 1) {
+      keys.forEach(function (k) {
+        var b = byTopic[k];
+        html += '<div class="bt"><div class="row"><span>' + esc(TOPICS[k].title) + '</span><span>' + b.ok + ' из ' + b.n + '</span></div>' +
+          '<div class="bar" role="img" aria-label="' + esc(TOPICS[k].title) + ': ' + b.ok + ' из ' + b.n + '"><i style="width:' + Math.round(b.ok / b.n * 100) + '%"></i></div></div>';
+      });
+    }
+    bt.innerHTML = html;
+
+    var retry = $('rRetry');
+    if (wrong.length) {
+      retry.hidden = false;
+      retry.textContent = 'Повторить ошибки (' + wrong.length + ')';
+      retry.onclick = function () { startRun(run.scope, wrong.map(function (it) { return it.q; })); };
+    } else { retry.hidden = true; }
+
+    var rv = $('rReview');
+    if (!wrong.length) {
+      rv.innerHTML = '<p class="empty">Ошибок нет: все ответы верны.</p>';
+    } else {
+      rv.innerHTML = '<h2>Разбор ошибок: ' + wrong.length + ' ' + plural(wrong.length, 'вопрос', 'вопроса', 'вопросов') + '</h2>' +
+        wrong.map(function (it) {
+          var good = it.opts.filter(function (o) { return o.ok; })[0];
+          return '<div class="rv"><p class="q">' + fmt(it.q.q) + '</p>' +
+            (it.q.code ? '<pre class="code">' + esc(it.q.code) + '</pre>' : '') +
+            '<p class="yours"><span class="lbl">Ваш ответ:</span> ' + fmt(it.opts[it.picked].text) + '</p>' +
+            '<p class="right"><span class="lbl">Верный ответ:</span> ' + fmt(good.text) + '</p>' +
+            '<p class="why">' + fmt(it.q.e) + '</p></div>';
+        }).join('');
+    }
+    show('result');
+    $('resTitle').focus({ preventScroll: true });
+  }
+
+  $('opts').addEventListener('click', function (e) {
+    var b = e.target.closest('.opt');
+    if (b) pick(parseInt(b.getAttribute('data-i'), 10));
+  });
+  $('next').addEventListener('click', advance);
+  $('qExit').addEventListener('click', function () { run = null; show('start'); });
+  $('rAgain').addEventListener('click', function () { startRun(lastScope); });
+  $('rMenu').addEventListener('click', function () { run = null; show('start'); });
+  document.addEventListener('keydown', function (e) {
+    if ($('quiz').hidden || !run || e.ctrlKey || e.metaKey || e.altKey) return;
+    var it = run.items[run.i];
+    if (it.picked === null && e.key >= '1' && e.key <= '9') { pick(parseInt(e.key, 10) - 1); }
+    else if (it.picked !== null && e.key === 'Enter' && document.activeElement !== $('next')) { e.preventDefault(); advance(); }
+  });
+
+  renderTopics();
+})();
+</script>
+</body>
+</html>
